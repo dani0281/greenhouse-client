@@ -39,7 +39,9 @@ void temperatureCallback()
 
   client.publish(temperature_topic, result);
 
-  delay(1000);
+  Serial.println("Temperature: " + String(temperature));
+
+  delay(20000);
 }
 
 void lightCallback()
@@ -53,7 +55,9 @@ void lightCallback()
 
   client.publish(light_topic, result);
 
-  delay(1000);
+  Serial.println("Light on: " + String(lightOn));
+
+  delay(20000);
 }
 
 void callback(char *topic, byte *payload, unsigned int length)
@@ -110,13 +114,15 @@ void setup()
 
   initializeEthernet();
 
-  Serial.println("Hello World!!!!\r\n");
+  // Serial.println("Hello World!!!!\r\n");
 
-  if (client.connect("arduinoClient"))
+  /* if (client.connect("dk25-2"))
   {
     client.publish("outTopic", "hello world");
     client.subscribe("inTopic");
-  }
+  } */
+
+  client.connect("dk25-2");
 
   temperatureThread.onRun(temperatureCallback);
   lightThread.onRun(lightCallback);
