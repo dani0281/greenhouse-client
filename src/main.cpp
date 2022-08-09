@@ -4,14 +4,57 @@
 #include <LwIP.h>
 #include <STM32Ethernet.h>
 #include <PubSubClient.h>
+#include <Thread.h>
 
-//IPAddress server(10, 20, 0, 9);
 IPAddress server(192, 168, 1, 2);
 
 void callback(char *topic, byte *payload, unsigned int length);
 
 EthernetClient ethClient;
 PubSubClient client(server, 1883, callback, ethClient);
+
+char *temperature_topic = "temperature/dk25-2";
+char *light_topic = "light/dk25-2";
+
+// Thread
+Thread temperatureThread = Thread();
+Thread lightThread = Thread();
+
+int light = 0;
+
+int a;
+float temperature;
+int B = 3975; // B value of the thermistor
+float resistance;
+
+void temperatureCallback()
+{
+  a = analogRead(A1);
+  resistance = (float)(1023 - a) * 10000 / a;
+  temperature = 1 / (log(resistance / 10000) / B + 1 / 298.15) - 273.15;
+
+  char result[5];
+
+  dtostrf(temperature, 5, 2, result);
+
+  client.publish(temperature_topic, result);
+
+  delay(1000);
+}
+
+void lightCallback()
+{
+  light = analogRead(A2);
+  int lightOn = light >= 400 ? 1 : 0;
+
+  char result[1];
+
+  sprintf(result, "%d", lightOn);
+
+  client.publish(light_topic, result);
+
+  delay(1000);
+}
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
@@ -74,9 +117,22 @@ void setup()
     client.publish("outTopic", "hello world");
     client.subscribe("inTopic");
   }
+
+  temperatureThread.onRun(temperatureCallback);
+  lightThread.onRun(lightCallback);
 }
 
 void loop()
 {
   client.loop();
+
+  if (temperatureThread.shouldRun())
+  {
+    temperatureThread.run();
+  }
+
+  if (lightThread.shouldRun())
+  {
+    lightThread.run();
+  }
 }
