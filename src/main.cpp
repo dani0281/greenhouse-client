@@ -1,5 +1,15 @@
-#include <Arduino.h>
+/**
+ * STM32 board application, using the Arduino framework to
+ * setup a client, which can measure temperatures and light,
+ * and publish them to a MQTT server.
+ *
+ * Special thanks to the PubSubClient for examples given,
+ * explaining how to setup a MQTT client.
+ *
+ * @author Daniele A. Buttigli
+ */
 
+#include <Arduino.h>
 #include <SPI.h>
 #include <LwIP.h>
 #include <STM32Ethernet.h>
@@ -20,46 +30,86 @@ char *light_topic = "light/dk25-2";
 Thread temperatureThread = Thread();
 Thread lightThread = Thread();
 
-int light = 0;
+int lightAnalogValue, temperatureAnalogValue;
 
-int a;
-float temperature;
+float temperature, resistance;
 int B = 3975; // B value of the thermistor
-float resistance;
 
+int publishCode = 0;
+
+void wait(int s)
+{
+  delay(s * 1000);
+}
+
+/**
+ * Ensure that the MQTT client is connected to the MQTT server.
+ */
+void ensureConnected()
+{
+  if (!client.connected())
+  {
+    while (!client.connect("dk25-2"))
+    {
+      wait(1);
+    }
+
+    Serial.println("");
+    Serial.println("(Re)connected");
+  }
+}
+
+/**
+ * Publish the temperature to the MQTT server.
+ */
 void temperatureCallback()
 {
-  a = analogRead(A1);
-  resistance = (float)(1023 - a) * 10000 / a;
+  ensureConnected();
+
+  temperatureAnalogValue = analogRead(A1);
+  resistance = (float)(1023 - temperatureAnalogValue) * 10000 / temperatureAnalogValue;
   temperature = 1 / (log(resistance / 10000) / B + 1 / 298.15) - 273.15;
 
   char result[5];
 
   dtostrf(temperature, 5, 2, result);
 
-  client.publish(temperature_topic, result);
+  publishCode = client.publish(temperature_topic, result);
+  Serial.println("Temperature: " + String(result));
 
-  Serial.println("Temperature: " + String(temperature));
-
-  delay(20000);
+  if (publishCode == 0)
+  {
+    Serial.println("Publish failed");
+  }
 }
 
+/**
+ * Publish the "light is on" value to the MQTT server.
+ */
 void lightCallback()
 {
-  light = analogRead(A2);
-  int lightOn = light >= 400 ? 1 : 0;
+  ensureConnected();
+
+  lightAnalogValue = analogRead(A2);
+  int lightOn = lightAnalogValue >= 400 ? 1 : 0;
 
   char result[1];
 
   sprintf(result, "%d", lightOn);
 
-  client.publish(light_topic, result);
+  publishCode = client.publish(light_topic, result);
+  Serial.println("Light on: " + String(result));
 
-  Serial.println("Light on: " + String(lightOn));
-
-  delay(20000);
+  if (publishCode == 0)
+  {
+    Serial.println("Publish failed");
+  }
 }
 
+/**
+ * Callback function for the MQTT client.
+ * Copied from the PubSubClient example.
+ */
 void callback(char *topic, byte *payload, unsigned int length)
 {
   // In order to republish this payload, a copy must be made
@@ -68,13 +118,18 @@ void callback(char *topic, byte *payload, unsigned int length)
 
   // Allocate the correct amount of memory for the payload copy
   byte *p = (byte *)malloc(length);
+
   // Copy the payload to the new buffer
   memcpy(p, payload, length);
   client.publish("outTopic", p, length);
+
   // Free the memory
   free(p);
 }
 
+/**
+ * Print the current IPv4 address to the serial port.
+ */
 void printIPAddress()
 {
   Serial.print("My IP address: ");
@@ -88,6 +143,9 @@ void printIPAddress()
   Serial.println();
 }
 
+/**
+ * Initialize the Ethernet connection.
+ */
 void initializeEthernet()
 {
   // start the Ethernet connection:
@@ -98,15 +156,18 @@ void initializeEthernet()
     for (;;)
       ;
   }
+
   // print your local IP address:
   printIPAddress();
 }
 
+/**
+ * Setup method for the application
+ */
 void setup()
 {
-  // Open serial communications and wait for port to open:
   Serial.begin(9600);
-  // this check is only needed on the Leonardo:
+
   while (!Serial)
   {
     ; // wait for serial port to connect. Needed for native USB port only
@@ -114,20 +175,13 @@ void setup()
 
   initializeEthernet();
 
-  // Serial.println("Hello World!!!!\r\n");
-
-  /* if (client.connect("dk25-2"))
-  {
-    client.publish("outTopic", "hello world");
-    client.subscribe("inTopic");
-  } */
-
-  client.connect("dk25-2");
-
   temperatureThread.onRun(temperatureCallback);
   lightThread.onRun(lightCallback);
 }
 
+/**
+ * Loop method for the application
+ */
 void loop()
 {
   client.loop();
@@ -141,4 +195,6 @@ void loop()
   {
     lightThread.run();
   }
+
+  wait(30);
 }
