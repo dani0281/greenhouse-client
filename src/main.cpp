@@ -49,7 +49,7 @@ void ensureConnected()
 {
   if (!client.connected())
   {
-    while (!client.connect("dk25-2"))
+    while (!client.connect("dk25-2", "dk25", "dk25Pass"))
     {
       wait(1);
     }
