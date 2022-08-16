@@ -23,8 +23,8 @@ void callback(char *topic, byte *payload, unsigned int length);
 EthernetClient ethClient;
 PubSubClient client(server, 1883, callback, ethClient);
 
-char *temperature_topic = "temperature/dk25-2";
-char *light_topic = "light/dk25-2";
+char temperature_topic[] = "temperature/dk25-2";
+char light_topic[] = "light/dk25-2";
 
 // Thread
 Thread temperatureThread = Thread();
