@@ -15,6 +15,7 @@
 #include <STM32Ethernet.h>
 #include <PubSubClient.h>
 #include <Thread.h>
+#include <DHT.h>
 
 IPAddress server(192, 168, 1, 2);
 
@@ -25,10 +26,12 @@ PubSubClient client(server, 1883, callback, ethClient);
 
 char temperature_topic[] = "temperature/dk25-2";
 char light_topic[] = "light/dk25-2";
+char humidity_topic[] = "humidity/dk25-2";
 
 // Thread
 Thread temperatureThread = Thread();
 Thread lightThread = Thread();
+Thread humidityThread = Thread();
 
 int lightAnalogValue, temperatureAnalogValue;
 
@@ -36,6 +39,11 @@ float temperature, resistance;
 int B = 3975; // B value of the thermistor
 
 int publishCode = 0;
+
+#define DHTPIN 2      // what pin we're connected to
+#define DHTTYPE DHT22 // DHT 22  (AM2302)
+
+DHT dht(DHTPIN, DHTTYPE);
 
 void wait(int s)
 {
@@ -99,6 +107,28 @@ void lightCallback()
 
   publishCode = client.publish(light_topic, result);
   Serial.println("Light on: " + String(result));
+
+  if (publishCode == 0)
+  {
+    Serial.println("Publish failed");
+  }
+}
+
+/**
+ * Publish the humidity to the MQTT server.
+ */
+void humidityCallback()
+{
+  ensureConnected();
+
+  float humidity = dht.readHumidity();
+
+  char result[5];
+
+  dtostrf(humidity, 5, 2, result);
+
+  publishCode = client.publish(humidity_topic, result);
+  Serial.println("Humidity: " + String(result) + "%");
 
   if (publishCode == 0)
   {
@@ -173,10 +203,13 @@ void setup()
     ; // wait for serial port to connect. Needed for native USB port only
   }
 
+  dht.begin();
+
   initializeEthernet();
 
   temperatureThread.onRun(temperatureCallback);
   lightThread.onRun(lightCallback);
+  humidityThread.onRun(humidityCallback);
 }
 
 /**
@@ -194,6 +227,11 @@ void loop()
   if (lightThread.shouldRun())
   {
     lightThread.run();
+  }
+
+  if (humidityThread.shouldRun())
+  {
+    humidityThread.run();
   }
 
   wait(30);
